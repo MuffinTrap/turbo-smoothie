@@ -7,7 +7,8 @@ class Example
 {
     Font* debugFont;
     Music* sampleMusic;
-    Sound* blip;
+    Sound* blips[4];
+    Sound* hit;
     Menu* menu;
     Menu* controllerMenu;
 
@@ -19,6 +20,8 @@ class Example
     // Terrain
     Mesh* quad;
     Node* terrainNode;
+
+    Mesh* pieceQuad;
 
     // Ship
     Node* shipNode;

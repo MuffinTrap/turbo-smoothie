@@ -2,7 +2,7 @@
 
 #include "sprite_collision.h"
 
-static const short spriteHeight = 64;
+static const short spriteHeight = 32;
 
 static Sprite* fruitSprites = NULL;
 FruitFormation::FruitFormation()
@@ -14,7 +14,7 @@ FruitFormation::FruitFormation()
 void FruitFormation::Load()
 {
     fruitSprites = mgdl_LoadSprite("assets/fruits.png", 16, 16);
-    for(int i = 0; i < 16; i++)
+    for(int i = 0; i < FRUIT_COUNT; i++)
     {
         collectedFruits[i] = 0;
 
@@ -27,23 +27,25 @@ int FruitFormation::GetCollectedAmount()
     int collected = 0;
     for (int i = 0; i < FRUIT_COUNT; i++)
     {
-        if (collectedFruits[i] == 1)
-        {
-            collected++;
-        }
+        collected +=  collectedFruits[i];
     }
     return collected;
 }
 
 
-void FruitFormation::Draw(V2f cursorPos, bool mouseClick)
+bool FruitFormation::Draw(V2f cursorPos, bool mouseClick)
 {
     mgdl_glSetAlphaTest(true);
     mgdl_glSetTransparency(true);
     int mx = mgdl_GetScreenWidth()/2;
-    int my = mgdl_GetScreenHeight()/2;
-        float time = mgdl_GetElapsedSeconds();
-        int size = spriteHeight;
+    int my = mgdl_GetScreenHeight()/2 + mgdl_GetScreenHeight()/4;
+    float time = mgdl_GetElapsedSeconds();
+    int size = spriteHeight;
+
+    bool gotFruit = false;
+
+    Sprite_BeginDrawBatch(fruitSprites);
+    // Fancier movements!
     for (int i = 0; i < FRUIT_COUNT; i++)
     {
         float angle = (M_PI * 2/(float)FRUIT_COUNT) * i;
@@ -57,11 +59,21 @@ void FruitFormation::Draw(V2f cursorPos, bool mouseClick)
                 if (mouseClick)
                 {
                     collectedFruits[i] = 1;
+                    gotFruit = true;
+
                 }
             }
             Sprite_Draw2D(fruitSprites, i, x, y, size, Centered, Centered, Color_GetDefaultColor(Color_White));
         }
+        else
+        {
+            Sprite_Draw2D(fruitSprites, i, size/2, mgdl_GetScreenHeight() - size - size/2 *i, size/2, LJustify, LJustify, Color_GetDefaultColor(Color_White));
+        }
     }
+
+    Sprite_EndDrawBatch();
+    // Draw collected fruits
     mgdl_glSetAlphaTest(false);
     mgdl_glSetTransparency(false);
+    return gotFruit;
 }

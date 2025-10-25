@@ -22,9 +22,10 @@ static bool Sprite_CheckCollisionPoint(Sprite* sprite, float x, float y, V2f poi
    if (vertical == RJustify) { tly -= h;}
    else if (vertical == Centered) { tly -= h/2.0f;}
 
+    bool is = PointInsideRect(V2f_X(point), V2f_Y(point), tlx, tly, w, h);
+   /*
 
     Draw2D_RectLines(tlx, tly, tlx + w, tly+h, Color_GetDefaultColor(Color_Red));
-    bool is = PointInsideRect(V2f_X(point), V2f_Y(point), tlx, tly, w, h);
     if (is)
     {
         Draw2D_RectLines(tlx, tly, tlx + w, tly+h, Color_GetDefaultColor(Color_Green));
@@ -33,5 +34,6 @@ static bool Sprite_CheckCollisionPoint(Sprite* sprite, float x, float y, V2f poi
     {
         Draw2D_RectLines(tlx, tly, tlx + w, tly+h, Color_GetDefaultColor(Color_Red));
     }
+    */
     return is;
 }

@@ -14,9 +14,23 @@
     #endif
 #endif
 
+static const int CHESS_AMOUNT = 8;
 
-static const float shipScale = 0.12f;
+static const float shipScale = 0.11f;
 static const float terrainScale = 50.0f;
+static V2f shipVelocity;
+static V2f shipAcceleration;
+
+static Texture* ChessPieces[CHESS_AMOUNT];
+static Node* ChessNodes[CHESS_AMOUNT];
+static V3f PiecePositions[CHESS_AMOUNT];
+static const char* PieceNames[] = {"pw", "pb", "kw", "kb", "rw", "rb", "bw", "bb"};
+
+
+static bool shipHit = false;
+static float lastHitTime = 0.0f;
+static float hitDuration = 1.0f;
+static Palette* cursorPalette;
 
 Example::Example()
 {
@@ -30,12 +44,12 @@ void Example::Init()
     debugFont = DefaultFont_GetDefaultFont();
 
     // Audio
-    blip = mgdl_LoadSound("assets/blipSelect.wav");
+    blips[0] = mgdl_LoadSound("assets/Pickup1.wav");
+    blips[1] = mgdl_LoadSound("assets/Pickup2.wav");
+    blips[2] = mgdl_LoadSound("assets/Pickup3.wav");
+    blips[3] = mgdl_LoadSound("assets/Pickup4.wav");
+    hit = mgdl_LoadSound("assets/Hit.wav");
     sampleMusic = mgdl_LoadOgg("assets/sample3.ogg");
-
-
-
-
 
     fruits = new FruitFormation();
     fruits->Load();
@@ -56,6 +70,7 @@ void Example::Init()
     Material* checkerMaterial = Material_Load("checker", checkerTexture, MaterialType::Diffuse);
     Scene_AddMaterial(gameScene, checkerMaterial );
 
+
     quad = Mesh_CreateQuad(FlagNormals | FlagUVs);
     // Mesh* icosaMesh = Mesh_CreateIcosahedron(FlagNormals | FlagUVs);
     terrainNode = Node_Create(1);
@@ -75,19 +90,45 @@ void Example::Init()
     Scene_SetAllMaterialTextures(shipScene, shipTexture);
 
     shipNode->material = shipMaterial;
-    Transform* shipTransform = Transform_Create(V3f_Create(0, -9, 0),
+    Transform* shipTransform = Transform_Create(
+        V3f_Create(0, -9, 0),
                                                    V3f_Create(0, 0, 0),
                                                    V3f_Create(shipScale, shipScale, shipScale));
     shipNode->transform = shipTransform;
 
-    printf("Ship vertices\n");
-    for (int i = 0 ; i < 100; i++)
-    {
-        V3f p = Mesh_GetPosition(shipNode->mesh, i);
-        printf("Pos: %d %.2f, %.2f, %.2f\n", i, p.x, p.y, p.z);
-    }
+    Scene_AddChildNode(gameScene, root, shipNode);
 
-    //Scene_AddChildNode(gameScene, root, shipNode);
+    // Obstacles?!
+    ChessPieces[0] = mgdl_LoadTexture("assets/Chess Pieces/pawn_white.png", TextureFilterModes::Nearest);
+    ChessPieces[1] = mgdl_LoadTexture("assets/Chess Pieces/pawn_black.png", TextureFilterModes::Nearest);
+    ChessPieces[2] = mgdl_LoadTexture("assets/Chess Pieces/knight_white.png", TextureFilterModes::Nearest);
+    ChessPieces[3] = mgdl_LoadTexture("assets/Chess Pieces/knight_black.png", TextureFilterModes::Nearest);
+    ChessPieces[4] = mgdl_LoadTexture("assets/Chess Pieces/rook_white.png", TextureFilterModes::Nearest);
+    ChessPieces[5] = mgdl_LoadTexture("assets/Chess Pieces/rook_black.png", TextureFilterModes::Nearest);
+    ChessPieces[6] = mgdl_LoadTexture("assets/Chess Pieces/bishop_white.png", TextureFilterModes::Nearest);
+    ChessPieces[7] = mgdl_LoadTexture("assets/Chess Pieces/bishop_black.png", TextureFilterModes::Nearest);
+    // Chess piece Nodes to terrain
+    float pieceScale = 8.0f;
+    float boardLeft_x = -20.2f;
+    float between_pieces = 5.7f;
+    pieceQuad = Mesh_CreateQuad(FlagUVs);
+    Random_SetSeed(0);
+    for (int i = 0; i < CHESS_AMOUNT; i++)
+    {
+        ChessNodes[i] = Node_Create(1);
+        Material* pieceMaterial = Material_Load(PieceNames[i], ChessPieces[i], MaterialType::Diffuse);
+        Scene_AddMaterial(gameScene, pieceMaterial);
+        Node_SetContent(ChessNodes[i], PieceNames[i], pieceQuad, pieceMaterial);
+        ChessNodes[i]->transform = Transform_Create(
+            V3f_Create(boardLeft_x + i * between_pieces,
+                       -pieceScale + pieceScale/4.0f, 0),
+            V3f_Create(0, 0, 0),
+            V3f_Create(pieceScale, pieceScale, pieceScale));
+        Scene_AddChildNode(gameScene, root, ChessNodes[i]);
+
+        // Randomize starting positions
+        PiecePositions[i].z = Random_Float(-80.0f, -30.0f);
+    }
 
 
     menu = Menu_CreateWindowed(debugFont, 1.0f, 1.1f, 256, 256, "Tweak");
@@ -95,6 +136,10 @@ void Example::Init()
     musicLooping = Music_GetLooping(sampleMusic);
 
     cameraDistance = 30.0f;
+    shipVelocity = V2f_Create(0,0);
+    shipAcceleration = V2f_Create(1.0f, 1.0f);
+
+    cursorPalette = Palette_GetDefault();
 
     #ifdef MGDL_ROCKET
         // Connect to editor
@@ -153,15 +198,49 @@ void Example::Update()
 
 
     // Move the ship
-    float shipMoveSpeed = 100.0f;
+    float shipMoveSpeed = 80.0f;
+    float maxvel_x = 10.0f;
+    float maxvel_z = 10.0f;
 
-    vec2 dir = WiiController_GetNunchukJoystickDirection(cr0);
+    vec2 controller_dir = WiiController_GetNunchukJoystickDirection(cr0);
     float shipx = shipNode->transform->position.x;
     float shipz = shipNode->transform->position.z;
 
-    shipx += dir.x * shipMoveSpeed * deltaTime;
-    shipz += dir.y * shipMoveSpeed * deltaTime;
+    vec2 dir;
+    V2f_Normalize(controller_dir, dir);
+    float deadzone = 0.3f;
 
+    if (abs(dir.x) > deadzone)
+    {
+        shipVelocity.x += dir.x * shipAcceleration.x * shipMoveSpeed * deltaTime;
+    }
+    else {
+        float decrease = shipVelocity.x * 0.9f;
+        if (shipVelocity.x > 0)
+        {
+            decrease *= -1.0f;
+        }
+        shipVelocity.x += decrease * deltaTime;
+    }
+
+    if (abs(dir.y) > deadzone)
+    {
+        shipVelocity.y += dir.y * shipAcceleration.y * shipMoveSpeed * deltaTime;
+    }
+    else {
+        float decrease = shipVelocity.y * 0.9f;
+        if (shipVelocity.y > 0)
+        {
+            decrease *= -1.0f;
+        }
+        shipVelocity.y += decrease * deltaTime;
+    }
+
+    shipVelocity.x = clampF(shipVelocity.x, -maxvel_x, maxvel_x);
+    shipVelocity.y = clampF(shipVelocity.y, -maxvel_z, maxvel_z);
+
+    shipx += shipVelocity.x * deltaTime;
+    shipz += shipVelocity.y * deltaTime;
 
     // Movement limits
     float minx = -11.0f;
@@ -176,11 +255,48 @@ void Example::Update()
     for (int i = 1; i < 8; i += 2)
     {
         quad->uvs[i] += deltaTime; // X1
-        if (quad->uvs[i] > 1.0f)
+        if (quad->uvs[i] > 2.0f)
         {
             //quad->uvs[i] -= 1.0f;
         }
     }
+
+    // Move the pieces
+    shipHit = false;
+    float pieceSpeed = 5.0f;
+    for(int i = 0; i < CHESS_AMOUNT; i++)
+    {
+        PiecePositions[i].z += pieceSpeed * deltaTime;
+        if (PiecePositions[i].z > 30.0f)
+        {
+            PiecePositions[i].z = Random_Float(-30, -80);
+        }
+        ChessNodes[i]->transform->position.z = PiecePositions[i].z;
+
+        // Does the ship hit a piece?
+        if (
+            (abs( ChessNodes[i]->transform->position.z - shipNode->transform->position.z) < 1.3f) &&
+            (abs( ChessNodes[i]->transform->position.x - shipNode->transform->position.x) < 0.3f))
+        {
+            // Hit!
+            if (mgdl_GetElapsedSeconds() - lastHitTime > hitDuration)
+            {
+                shipHit = true;
+                lastHitTime = mgdl_GetElapsedSeconds();
+                Sound_Play(hit);
+                for (int i = 0; i < FRUIT_COUNT; i++)
+                {
+                    if( fruits->collectedFruits[i] == 1)
+                    {
+                        fruits->collectedFruits[i] = 0;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+
 }
 #if 0
 
@@ -204,9 +320,26 @@ void Example::Draw()
 
     V3f scale = V3f_Create(1,1,1);
     DrawScene(gameScene, scale);
-    DrawScene(shipScene, scale);
+    //DrawScene(shipScene, scale);
 
     // Where is that ship!
+    /*
+    glBegin(GL_LINES);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    for(int i = 0; i < CHESS_AMOUNT; i++)
+    {
+        // Does the ship hit a piece?
+        glVertex3f(
+        ChessNodes[i]->transform->position.x,
+        ChessNodes[i]->transform->position.y,
+        ChessNodes[i]->transform->position.z);
+        glVertex3f(
+            shipNode->transform->position.x,
+            shipNode->transform->position.y,
+            shipNode->transform->position.z);
+    }
+    glEnd();
+    */
 
 
     mgdl_InitOrthoProjection();
@@ -214,14 +347,41 @@ void Example::Draw()
     glLoadIdentity();
 
     DrawFruits();
+
+    float time = mgdl_GetElapsedSeconds() * 60;
+    float crossHairRadius = 32.0f;
+    float rad = crossHairRadius;
+    float dirx = 1.0f;
+    float diry = 1.0f;
+    // Draw cursor
+    glPushMatrix();
+    glLineWidth(4.0f);
+    glTranslatef(cursorPos.x, cursorPos.y, 0.0f);
+    for (int i = 0; i < 3; i++)
+    {
+        glRotatef(time + i * 30, 0.0f, 0.0f, 1.0f);
+        float x1 = 0.0f - dirx * rad/2.0f;
+        float y1 = 0.0f + diry * rad/2.0f;
+
+        Color4f c = Palette_GetColor4f(cursorPalette, 2+i);
+        Draw2D_RectLinesWH(x1, y1, crossHairRadius, crossHairRadius, &c);
+    }
+    glLineWidth(1.0f);
+    glPopMatrix();
+
     //Scene_DebugDraw(shipScene, menu, 10, 10, (Scene_DebugFlag::Index + Scene_DebugFlag::Position));
-    DrawMenu();
+    //DrawMenu();
+
 
 }
 
 void Example::DrawFruits()
 {
-    fruits->Draw(cursorPos, mouseClick);
+    bool got = fruits->Draw(cursorPos, mouseClick);
+    if (got)
+    {
+        Sound_Play(blips[Random_Int(0,3)]);
+    }
 }
 
 void Example::DrawScene ( Scene* scene, V3f scale)
@@ -232,13 +392,16 @@ void Example::DrawScene ( Scene* scene, V3f scale)
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
-	glDepthMask(GL_TRUE); //  is this needed?
+	//glDepthMask(GL_TRUE); //  is this needed?
 
 	// This is the other way around on Wii, but
 	// hopefully OpenGX handles it
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glShadeModel(GL_FLAT);
+
+    mgdl_glSetAlphaTest(true);
+    mgdl_glSetTransparency(true);
 
     glColor3f(1.0f, 1.0f, 1.0f);
 
@@ -252,6 +415,8 @@ void Example::DrawScene ( Scene* scene, V3f scale)
     glScalef(scale.x, scale.y, scale.z);
 
     Scene_Draw(scene);
+    mgdl_glSetTransparency(false);
+    mgdl_glSetAlphaTest(false);
 
     glPopMatrix();
     glDisable(GL_DEPTH_TEST);
@@ -322,7 +487,7 @@ void AdjustNodeTransform(Menu* menu, Node* node, float scaleMult)
 
 void Example::DrawMenu()
 {
-    int w = 256;
+    int w = 140;
     int x = mgdl_GetScreenWidth() - w;
     int y = mgdl_GetScreenHeight() - 8;
 
@@ -334,6 +499,12 @@ void Example::DrawMenu()
 
     AdjustNodeTransform(menu, terrainNode, terrainScale);
     AdjustNodeTransform(menu, shipNode, shipScale);
+    AdjustNodeTransform(menu, ChessNodes[1], 1.0f );
+
+    if (shipHit)
+    {
+        Menu_Text(menu, "HIT!");
+    }
 
 
 #if MGDL_ROCKET

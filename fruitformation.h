@@ -7,11 +7,11 @@ class FruitFormation
 {
 public:
 
-    int collectedFruits[16];
+    int collectedFruits[FRUIT_COUNT];
     FruitFormation();
     void Load();
 
-    void Draw( V2f cursorPos, bool mouseClick);
+    bool Draw( V2f cursorPos, bool mouseClick);
     int GetCollectedAmount();
 
 };
