@@ -25,6 +25,7 @@ static Texture* ChessPieces[CHESS_AMOUNT];
 static Node* ChessNodes[CHESS_AMOUNT];
 static V3f PiecePositions[CHESS_AMOUNT];
 static const char* PieceNames[] = {"pw", "pb", "kw", "kb", "rw", "rb", "bw", "bb"};
+const float pieceScale = 8.0f;
 
 
 static bool shipHit = false;
@@ -91,8 +92,8 @@ void Example::Init()
 
     shipNode->material = shipMaterial;
     Transform* shipTransform = Transform_Create(
-        V3f_Create(0, -9, 0),
-                                                   V3f_Create(0, 0, 0),
+        V3f_Create(0, -8, 0),
+                                        V3f_Create(0, 0, 0),
                                                    V3f_Create(shipScale, shipScale, shipScale));
     shipNode->transform = shipTransform;
 
@@ -108,7 +109,6 @@ void Example::Init()
     ChessPieces[6] = mgdl_LoadTexture("assets/Chess Pieces/bishop_white.png", TextureFilterModes::Nearest);
     ChessPieces[7] = mgdl_LoadTexture("assets/Chess Pieces/bishop_black.png", TextureFilterModes::Nearest);
     // Chess piece Nodes to terrain
-    float pieceScale = 8.0f;
     float boardLeft_x = -20.2f;
     float between_pieces = 5.7f;
     pieceQuad = Mesh_CreateQuad(FlagUVs);
@@ -263,24 +263,29 @@ void Example::Update()
 
     // Move the pieces
     shipHit = false;
-    float pieceSpeed = 5.0f;
+    float pieceSpeed = 15.0 + fruits->GetCollectedAmount() * 5;
     for(int i = 0; i < CHESS_AMOUNT; i++)
     {
         PiecePositions[i].z += pieceSpeed * deltaTime;
         if (PiecePositions[i].z > 30.0f)
         {
             PiecePositions[i].z = Random_Float(-30, -80);
+            ChessNodes[i]->transform->rotationDegrees.x = 0;
+            ChessNodes[i]->transform->position.y = -pieceScale + pieceScale/4.0f;
         }
         ChessNodes[i]->transform->position.z = PiecePositions[i].z;
 
         // Does the ship hit a piece?
         if (
             (abs( ChessNodes[i]->transform->position.z - shipNode->transform->position.z) < 1.3f) &&
-            (abs( ChessNodes[i]->transform->position.x - shipNode->transform->position.x) < 0.3f))
+            (abs( ChessNodes[i]->transform->position.x - shipNode->transform->position.x) < 2.0f))
         {
             // Hit!
             if (mgdl_GetElapsedSeconds() - lastHitTime > hitDuration)
             {
+                //Flatten the piece
+                ChessNodes[i]->transform->rotationDegrees.x = -90;
+                ChessNodes[i]->transform->position.y = -pieceScale;
                 shipHit = true;
                 lastHitTime = mgdl_GetElapsedSeconds();
                 Sound_Play(hit);
