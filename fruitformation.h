@@ -12,6 +12,7 @@ public:
     void Load();
 
     bool Draw( V2f cursorPos, bool mouseClick);
+    void Draw_Intro( );
     int GetCollectedAmount();
 
 };

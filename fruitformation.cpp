@@ -32,6 +32,31 @@ int FruitFormation::GetCollectedAmount()
     return collected;
 }
 
+void FruitFormation::Draw_Intro()
+{
+    mgdl_glSetAlphaTest(true);
+    mgdl_glSetTransparency(true);
+    int mx = mgdl_GetScreenWidth()/2;
+    int my = mgdl_GetScreenHeight()/2;
+    float time = mgdl_GetElapsedSeconds();
+    int size = spriteHeight * 2;
+
+    Sprite_BeginDrawBatch(fruitSprites);
+    for (int i = 0; i < FRUIT_COUNT; i++)
+    {
+        float angle = (M_PI * 2/(float)FRUIT_COUNT) * i;
+        float radius = size * 3.5 + sin(time) * size*0.5f;
+        float x = mx + cos(time + angle) * radius;
+        float y = my + sin(time + angle) * radius;
+        Sprite_Draw2D(fruitSprites, i, x, y, size, Centered, Centered, Color_GetDefaultColor(Color_White));
+    }
+
+    Sprite_EndDrawBatch();
+    // Draw collected fruits
+    mgdl_glSetAlphaTest(false);
+    mgdl_glSetTransparency(false);
+
+}
 
 bool FruitFormation::Draw(V2f cursorPos, bool mouseClick)
 {

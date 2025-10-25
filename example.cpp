@@ -33,6 +33,15 @@ static float lastHitTime = 0.0f;
 static float hitDuration = 1.0f;
 static Palette* cursorPalette;
 
+static float menuWidth = 320;
+
+static float GetLaneX(int laneNumber)
+{
+    float boardLeft_x = -20.2f;
+    float between_pieces = 5.7f;
+    return boardLeft_x + between_pieces * laneNumber;
+}
+
 Example::Example()
 {
 
@@ -109,8 +118,6 @@ void Example::Init()
     ChessPieces[6] = mgdl_LoadTexture("assets/Chess Pieces/bishop_white.png", TextureFilterModes::Nearest);
     ChessPieces[7] = mgdl_LoadTexture("assets/Chess Pieces/bishop_black.png", TextureFilterModes::Nearest);
     // Chess piece Nodes to terrain
-    float boardLeft_x = -20.2f;
-    float between_pieces = 5.7f;
     pieceQuad = Mesh_CreateQuad(FlagUVs);
     Random_SetSeed(0);
     for (int i = 0; i < CHESS_AMOUNT; i++)
@@ -120,7 +127,7 @@ void Example::Init()
         Scene_AddMaterial(gameScene, pieceMaterial);
         Node_SetContent(ChessNodes[i], PieceNames[i], pieceQuad, pieceMaterial);
         ChessNodes[i]->transform = Transform_Create(
-            V3f_Create(boardLeft_x + i * between_pieces,
+            V3f_Create(GetLaneX(Random_Int(0,7)),
                        -pieceScale + pieceScale/4.0f, 0),
             V3f_Create(0, 0, 0),
             V3f_Create(pieceScale, pieceScale, pieceScale));
@@ -131,7 +138,7 @@ void Example::Init()
     }
 
 
-    menu = Menu_CreateWindowed(debugFont, 1.0f, 1.1f, 256, 256, "Tweak");
+    menu = Menu_CreateWindowed(debugFont, 1.5f, 1.1f, menuWidth, 256, "TURBO");
 
     musicLooping = Music_GetLooping(sampleMusic);
 
@@ -140,6 +147,8 @@ void Example::Init()
     shipAcceleration = V2f_Create(1.0f, 1.0f);
 
     cursorPalette = Palette_GetDefault();
+
+    state = GameState::Intro;
 
     #ifdef MGDL_ROCKET
         // Connect to editor
@@ -174,6 +183,57 @@ void Example::Quit()
 
 void Example::Update()
 {
+    elapsedSeconds = mgdl_GetElapsedSeconds();
+    deltaTime = mgdl_GetDeltaTime();
+
+    WiiController* cr0 = Platform_GetController(0);
+    cursorPos = WiiController_GetCursorPosition(cr0);
+    mouseClick = WiiController_ButtonPress(cr0, ButtonA);
+    mouseDown = WiiController_ButtonHeld(cr0, ButtonA);
+
+    switch(state)
+    {
+        case GameState::Intro:
+            if(Update_Init())
+            {
+                state = GameState::Play;
+            }
+            break;
+        case GameState::Play:
+            if(Update_Game())
+            {
+                state = GameState::Win;
+            }
+            break;
+        case GameState::Win:
+            if(Update_Win())
+            {
+                state = GameState::Intro;
+            }
+            break;
+    }
+
+}
+bool Example::Update_Init()
+{
+    if (mouseClick)
+    {
+        return true;
+    }
+    return false;
+
+}
+bool Example::Update_Win()
+{
+    if (mouseClick)
+    {
+        return true;
+    }
+    return false;
+}
+
+bool Example::Update_Game()
+{
     #ifdef MGDL_ROCKET
 
         Rocket_UpdateRow();
@@ -188,13 +248,6 @@ void Example::Update()
         #endif
     #endif
 
-    elapsedSeconds = mgdl_GetElapsedSeconds();
-    deltaTime = mgdl_GetDeltaTime();
-
-    WiiController* cr0 = Platform_GetController(0);
-    cursorPos = WiiController_GetCursorPosition(cr0);
-    mouseClick = WiiController_ButtonPress(cr0, ButtonA);
-    mouseDown = WiiController_ButtonHeld(cr0, ButtonA);
 
 
     // Move the ship
@@ -202,7 +255,7 @@ void Example::Update()
     float maxvel_x = 10.0f;
     float maxvel_z = 10.0f;
 
-    vec2 controller_dir = WiiController_GetNunchukJoystickDirection(cr0);
+    vec2 controller_dir = WiiController_GetNunchukJoystickDirection(Platform_GetController(0));
     float shipx = shipNode->transform->position.x;
     float shipz = shipNode->transform->position.z;
 
@@ -271,7 +324,9 @@ void Example::Update()
         {
             PiecePositions[i].z = Random_Float(-30, -80);
             ChessNodes[i]->transform->rotationDegrees.x = 0;
+            ChessNodes[i]->transform->position.x = GetLaneX(Random_Int(0,7));
             ChessNodes[i]->transform->position.y = -pieceScale + pieceScale/4.0f;
+
         }
         ChessNodes[i]->transform->position.z = PiecePositions[i].z;
 
@@ -300,7 +355,7 @@ void Example::Update()
             }
         }
     }
-
+    return fruits->GetCollectedAmount() >= FRUIT_COUNT;
 
 }
 #if 0
@@ -318,6 +373,68 @@ void DrawTextDouble(const char* text, short x, short y, float textHeight, Font* 
 #endif
 
 void Example::Draw()
+{
+    switch(state)
+    {
+        case GameState::Intro:
+            Draw_Init();
+            break;
+        case GameState::Play:
+            Draw_Game();
+            break;
+        case GameState::Win:
+            Draw_Win();
+            break;
+    }
+}
+
+void Example::Draw_Init()
+{
+    Color4f black = Palette_GetColor4f(Palette_GetDefault(), 5);
+    mgdl_glClearColor4f(&black);
+    mgdl_InitOrthoProjection();
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    fruits->Draw_Intro();
+
+    int w = menu->menuWidth;
+    int x = mgdl_GetScreenWidth()/2-w/2;
+    int y = mgdl_GetScreenHeight()/2 + menu->windowHeight/2;
+
+    menu->windowName = "TURBO SMOOTHIE";
+    Menu_Start(menu, x, y, w);
+
+    Menu_Text(menu, "Collect fruit to go fast");
+    Menu_Text(menu, "Nunchuck joystick to move");
+    Menu_Skip(menu, 32);
+    Menu_Text(menu, "Press A to start");
+}
+
+void Example::Draw_Win()
+{
+    Color4f black = Palette_GetColor4f(Palette_GetDefault(), 5);
+    mgdl_glClearColor4f(&black);
+    mgdl_InitOrthoProjection();
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    fruits->Draw_Intro();
+    int w = menu->menuWidth;
+    int x = mgdl_GetScreenWidth()/2-w/2;
+    int y = mgdl_GetScreenHeight()/2 + menu->windowHeight/2;
+
+    menu->windowName = "YOU WIN";
+    Menu_Start(menu, x, y, w);
+
+    Menu_Text(menu, "You really are");
+    Menu_Text(menu, "the fastest!");
+    Menu_Skip(menu, 32);
+    Menu_Text(menu, "Press A to restart");
+
+}
+
+void Example::Draw_Game()
 {
     Color4f black = Palette_GetColor4f(Palette_GetDefault(), 5);
     mgdl_glClearColor4f(&black);

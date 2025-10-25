@@ -3,6 +3,13 @@
 #include <mgdl.h>
 #include "fruitformation.h"
 
+enum GameState
+{
+    Intro,
+    Play,
+    Win
+};
+
 class Example
 {
     Font* debugFont;
@@ -16,6 +23,8 @@ class Example
     Scene* gameScene;
 
     FruitFormation* fruits;
+
+    GameState state;
 
     // Terrain
     Mesh* quad;
@@ -39,7 +48,13 @@ class Example
         Example();
         void Init();
         void Update();
+        bool Update_Init();
+        bool Update_Game();
+        bool Update_Win();
         void Draw();
+        void Draw_Init();
+        void Draw_Game();
+        void Draw_Win();
         void Quit();
 
         void DrawFruits();
