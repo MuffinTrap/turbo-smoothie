@@ -20,6 +20,7 @@ class Example
     Menu* controllerMenu;
 
     Texture* checkerTexture;
+    Texture* cloudBg;
     Scene* gameScene;
 
     FruitFormation* fruits;

@@ -27,6 +27,11 @@ static V3f PiecePositions[CHESS_AMOUNT];
 static const char* PieceNames[] = {"pw", "pb", "kw", "kb", "rw", "rb", "bw", "bb"};
 const float pieceScale = 8.0f;
 
+static float pieceSpeed = 5.0f;
+static float pieceSpeedIncrease = 5.0f;
+static float terrainSpeed = 0.1f;
+static float terrainSpeedIncrease = 0.1f;
+
 
 static bool shipHit = false;
 static float lastHitTime = 0.0f;
@@ -34,6 +39,10 @@ static float hitDuration = 1.0f;
 static Palette* cursorPalette;
 
 static float menuWidth = 320;
+
+static float bgScale = 83.7f;
+static float bgX = 42.0f;
+static float bgY = -18.0f;
 
 static float GetLaneX(int laneNumber)
 {
@@ -59,10 +68,12 @@ void Example::Init()
     blips[2] = mgdl_LoadSound("assets/Pickup3.wav");
     blips[3] = mgdl_LoadSound("assets/Pickup4.wav");
     hit = mgdl_LoadSound("assets/Hit.wav");
-    sampleMusic = mgdl_LoadOgg("assets/sample3.ogg");
+    sampleMusic = mgdl_LoadOgg("assets/turbo_smoothie.ogg");
 
     fruits = new FruitFormation();
     fruits->Load();
+
+    cloudBg = mgdl_LoadTexture("assets/bg_clouds.png", TextureFilterModes::Linear);
 
     // Game scene
     gameScene = Scene_CreateEmpty();
@@ -134,21 +145,21 @@ void Example::Init()
         Scene_AddChildNode(gameScene, root, ChessNodes[i]);
 
         // Randomize starting positions
-        PiecePositions[i].z = Random_Float(-80.0f, -30.0f);
+        PiecePositions[i].z = Random_Float(-60.0f, -30.0f);
     }
 
 
     menu = Menu_CreateWindowed(debugFont, 1.5f, 1.1f, menuWidth, 256, "TURBO");
 
-    musicLooping = Music_GetLooping(sampleMusic);
 
     cameraDistance = 30.0f;
     shipVelocity = V2f_Create(0,0);
-    shipAcceleration = V2f_Create(1.0f, 1.0f);
+    shipAcceleration = V2f_Create(1.5f, 1.1f);
 
     cursorPalette = Palette_GetDefault();
 
     state = GameState::Intro;
+    Music_Play(sampleMusic, true);
 
     #ifdef MGDL_ROCKET
         // Connect to editor
@@ -208,6 +219,7 @@ void Example::Update()
         case GameState::Win:
             if(Update_Win())
             {
+                fruits->Reset();
                 state = GameState::Intro;
             }
             break;
@@ -304,10 +316,12 @@ bool Example::Update_Game()
     shipNode->transform->position.x = clampF(shipx, minx, maxx);
     shipNode->transform->position.z = clampF(shipz, minz, maxz);
 
+    int collected = fruits->GetCollectedAmount();
     // Scroll the texture uvs
+    float scrollSpeed = terrainSpeed + collected * terrainSpeedIncrease;
     for (int i = 1; i < 8; i += 2)
     {
-        quad->uvs[i] += deltaTime; // X1
+        quad->uvs[i] += scrollSpeed *  deltaTime; // X1
         if (quad->uvs[i] > 2.0f)
         {
             //quad->uvs[i] -= 1.0f;
@@ -316,13 +330,13 @@ bool Example::Update_Game()
 
     // Move the pieces
     shipHit = false;
-    float pieceSpeed = 15.0 + fruits->GetCollectedAmount() * 5;
+    float pieceMove = pieceSpeed + collected * pieceSpeedIncrease;
     for(int i = 0; i < CHESS_AMOUNT; i++)
     {
-        PiecePositions[i].z += pieceSpeed * deltaTime;
+        PiecePositions[i].z += pieceMove * deltaTime;
         if (PiecePositions[i].z > 30.0f)
         {
-            PiecePositions[i].z = Random_Float(-30, -80);
+            PiecePositions[i].z = Random_Float(-60, -30);
             ChessNodes[i]->transform->rotationDegrees.x = 0;
             ChessNodes[i]->transform->position.x = GetLaneX(Random_Int(0,7));
             ChessNodes[i]->transform->position.y = -pieceScale + pieceScale/4.0f;
@@ -440,6 +454,7 @@ void Example::Draw_Game()
     mgdl_glClearColor4f(&black);
 
 
+
     V3f scale = V3f_Create(1,1,1);
     DrawScene(gameScene, scale);
     //DrawScene(shipScene, scale);
@@ -459,7 +474,7 @@ void Example::Draw_Game()
             shipNode->transform->position.x,
             shipNode->transform->position.y,
             shipNode->transform->position.z);
-    }
+
     glEnd();
     */
 
@@ -511,6 +526,12 @@ void Example::DrawScene ( Scene* scene, V3f scale)
     // Try to draw Wii 3D model
     mgdl_InitPerspectiveProjection(75.0f, 0.1f, 100.0f);
     mgdl_InitCamera(V3f_Create(0.0f, 0.0f, cameraDistance), V3f_Create(0.0f, 0.0f, 0.0f), V3f_Create(0.0f, 1.0f, 0.0f));
+
+    float drawBgY = bgY + sin(mgdl_GetElapsedSeconds()/4.0f) * 2.0f;
+    glPushMatrix();
+    glTranslatef(bgX, drawBgY, -10.0f);
+    Texture_Draw3D(cloudBg, bgScale, Centered, Centered);
+    glPopMatrix();
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
@@ -609,9 +630,9 @@ void AdjustNodeTransform(Menu* menu, Node* node, float scaleMult)
 
 void Example::DrawMenu()
 {
-    int w = 140;
-    int x = mgdl_GetScreenWidth() - w;
-    int y = mgdl_GetScreenHeight() - 8;
+    int w = menuWidth;
+    int x = 0;
+    int y = menu->windowHeight;
 
     Menu_Start(menu, x, y, w);
 
@@ -619,9 +640,12 @@ void Example::DrawMenu()
 
     Menu_TextF(menu, "Fruits %d/%d", collected, FRUIT_COUNT);
 
-    AdjustNodeTransform(menu, terrainNode, terrainScale);
-    AdjustNodeTransform(menu, shipNode, shipScale);
-    AdjustNodeTransform(menu, ChessNodes[1], 1.0f );
+    //AdjustNodeTransform(menu, terrainNode, terrainScale);
+    //AdjustNodeTransform(menu, shipNode, shipScale);
+    //AdjustNodeTransform(menu, ChessNodes[1], 1.0f );
+    Menu_Slider(menu, "BGScale", 1.0f, 200.0f, &bgScale);
+    Menu_Slider(menu, "BGX", 0.0f, 500.0f, &bgX);
+    Menu_Slider(menu, "BGY", -100.0f, 0.0f, &bgY);
 
     if (shipHit)
     {

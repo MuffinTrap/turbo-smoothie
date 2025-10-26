@@ -10,9 +10,12 @@ public:
     int collectedFruits[FRUIT_COUNT];
     FruitFormation();
     void Load();
+    void Reset();
 
     bool Draw( V2f cursorPos, bool mouseClick);
     void Draw_Intro( );
     int GetCollectedAmount();
+
+    float movedir = 1.0f;
 
 };
