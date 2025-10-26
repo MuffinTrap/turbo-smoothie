@@ -49,7 +49,8 @@ void FruitFormation::Draw_Intro()
     float time = mgdl_GetElapsedSeconds();
     int size = spriteHeight * 2;
 
-    Sprite_BeginDrawBatch(fruitSprites);
+    // TODO Batch drawing skips the last one on Wii and Dolphin
+    //Sprite_BeginDrawBatch(fruitSprites);
     for (int i = 0; i < FRUIT_COUNT; i++)
     {
         float angle = (M_PI * 2/(float)FRUIT_COUNT) * i;
@@ -59,7 +60,7 @@ void FruitFormation::Draw_Intro()
         Sprite_Draw2D(fruitSprites, i, x, y, size, Centered, Centered, Color_GetDefaultColor(Color_White));
     }
 
-    Sprite_EndDrawBatch();
+    //Sprite_EndDrawBatch();
     // Draw collected fruits
     mgdl_glSetAlphaTest(false);
     mgdl_glSetTransparency(false);
@@ -77,7 +78,6 @@ bool FruitFormation::Draw(V2f cursorPos, bool mouseClick)
 
     bool gotFruit = false;
 
-    Sprite_BeginDrawBatch(fruitSprites);
     // Fancier movements!
     for (int i = 0; i < FRUIT_COUNT; i++)
     {
@@ -115,7 +115,6 @@ bool FruitFormation::Draw(V2f cursorPos, bool mouseClick)
 
     }
 
-    Sprite_EndDrawBatch();
     // Draw collected fruits
     mgdl_glSetAlphaTest(false);
     mgdl_glSetTransparency(false);

@@ -1,11 +1,15 @@
-Turbo Smoothie
+**Turbo Smoothie**
 
 made by muffintrap 
 for Retro Game Jam 2025.
 
 Extra Credits:
+=================
 Chess pieces by Telepastelic
 https://telepastelic.itch.io/chess-pieces-sprite-set
+
+Background by Sam
+https://samvieten.itch.io/pixelart-clouds-background
 
 Music made in Reaper
 

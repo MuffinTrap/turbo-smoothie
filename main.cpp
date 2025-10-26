@@ -35,7 +35,7 @@ void quit()
 
 int main()
 {
-    mgdl_InitSystem("mgdl example project",
+    mgdl_InitSystem("TURBO SMOOTHIE",
         ScreenAspect::Screen4x3,
             init,
             frame,
